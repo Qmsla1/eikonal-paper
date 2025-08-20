@@ -576,6 +576,12 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
 
     current_optimizer = pretrain_optimizer if pretrain_optimizer is not None else optimizer
 
+    # Print legend for compact log output
+    legend_parts = ['Legend: E=Error', 'L=Loss', 'LG=Lagrangian-term', 'AG=Augmented-term']
+    legend_parts += [f"{name.replace('loss_', '')}={name}" for name in aug_lagrangian.loss_terms.keys()]
+    legend_parts.append('μ=penalty parameter')
+    print(' '.join(legend_parts))
+
     for epoch in range(num_epochs):
         # Store loss values outside closure for access after optimization step
         current_loss_values = {}
@@ -658,22 +664,27 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
                 metrics_collector.plot_metrics()
                 break
 
-            # Print progress
-            # Print progress in a single line
-            status_line = f'Epoch {epoch}:[{data_dim}], Error: {train_acc_error:.6f}, Loss: {current_loss_values["loss"]:.6f}, '
-            status_line += f'Lagrangian-term: {current_loss_values["lagrangian_term"]:.6f}, Augmented-term: {current_loss_values["augmented_term"]:.6f}, '
+            # Print progress in a compact single line
+            status_line = (
+                f'Epoch {epoch}:[{data_dim}] '
+                f'E:{train_acc_error:.6f} '
+                f'L:{current_loss_values["loss"]:.6f} '
+                f'LG:{current_loss_values["lagrangian_term"]:.6f} '
+                f'AG:{current_loss_values["augmented_term"]:.6f} '
+            )
 
             # Add loss terms info
             terms_info = []
             for name, term in aug_lagrangian.loss_terms.items():
-                weight_val = term.get_weight() if not torch.is_tensor(
-                    term.get_weight()) else term.get_weight().item()
+                short_name = name.replace("loss_", "")
+                weight_val = term.get_weight() if not torch.is_tensor(term.get_weight()) else term.get_weight().item()
                 weight_str = f"λ={weight_val:.4f}" if term.use_lagrange_multiplier else f"w={weight_val:.4f}"
                 violation_str = f"v={constraint_violations.get(name, 0):.6f}" if term.is_constraint else ""
                 terms_info.append(
-                    f"{name}={current_loss_values[name]:.6f}({weight_str}{' ' + violation_str if violation_str else ''})")
+                    f"{short_name}:{current_loss_values[name]:.6f}({weight_str}{' ' + violation_str if violation_str else ''})"
+                )
 
-            status_line += ', '.join(terms_info) + f", μ={aug_lagrangian.mu:.4f}"
+            status_line += ' '.join(terms_info) + f' μ:{aug_lagrangian.mu:.4f}'
             print(status_line)
 
         # If training loop completes without early stopping, save all metrics
