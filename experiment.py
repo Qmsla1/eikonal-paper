@@ -487,7 +487,7 @@ def projection_loss_fn(model, x, epoch=None):
 
 
 # Example usage for training a PINN
-def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, data_dim, dev):
+def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, data_dim, dev, pretrain_optimizer=None, pretrain_epochs=0):
     """
     Train a PINN using the modular augmented Lagrangian method.
     """
@@ -534,7 +534,7 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
             compute_fn=lambda: dmax_loss_fn(model, x_train),
             is_constraint=False,
             use_lagrange_multiplier=False,
-            weight=1.0
+            weight=2.0
         ),
         # Absolute value constraint
         LossTerm(
@@ -568,11 +568,13 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
     aug_lagrangian = ModularAugmentedLagrangian(
         model=model,
         loss_terms=loss_terms,
-        mu_initial=0.1,
+        mu_initial=1.0,
         mu_max=1e6
     )
 
     freq_update = 1
+
+    current_optimizer = pretrain_optimizer if pretrain_optimizer is not None else optimizer
 
     for epoch in range(num_epochs):
         # Store loss values outside closure for access after optimization step
@@ -598,7 +600,10 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
             return loss
 
         # Update model parameters - this runs the closure function
-        loss = optimizer.step(closure)
+        loss = current_optimizer.step(closure)
+
+        if pretrain_optimizer is not None and epoch + 1 == pretrain_epochs:
+            current_optimizer = optimizer
 
         # Use the loss values calculated within the closure
         constraint_violations = aug_lagrangian.update_multipliers(current_loss_values)

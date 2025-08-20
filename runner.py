@@ -54,6 +54,7 @@ config = {
     'output_dim': 1,
     'num_hidden_layers': 5,
     'num_epochs': 1000,
+    'pretrain_epochs': 200,
     'manifold_type': 'circle',
     'n_train_int': 100000,
     'n_train_b': 10000,
@@ -116,9 +117,9 @@ for dim in config['dimensions_to_test']:
         model = PINN(dim, config['n_neurons'], config['output_dim'], config['num_hidden_layers']).to(dev)
         if num_gpus > 1:
             model = nn.DataParallel(model)
-        # Initialize optimizer.
+        # Initialize optimizers: Adam pretraining followed by LBFGS fine-tuning
         optimizer = LBFGS(model.parameters(), **config['optimizer_config'])
-        # optimizer = Adam(model.parameters(), lr=0.1)
+        pretrain_optimizer = Adam(model.parameters(), lr=1e-3)
         # Import manifold instance.
         from manifolds.manifold_factory import ManifoldFactory
         manifold = ManifoldFactory.get_instance_direct(dev, config['manifold_type'], output_dim=dim)
@@ -127,7 +128,18 @@ for dim in config['dimensions_to_test']:
         x_train_b = sample_x_train_b(n_points=config['n_train_b'], manifold=manifold).to(dev0)
         x_train_int = sample_x_train_int(n_points=config['n_train_int'], manifold=manifold, r=0, r_max=20, dev=dev0).to(dev0)
         # Train the model.
-        model, metrics_collector = train_pinn(model, optimizer, x_train_int, x_train_b, config['num_epochs'], exp_manager, dim, dev)
+        model, metrics_collector = train_pinn(
+            model,
+            optimizer,
+            x_train_int,
+            x_train_b,
+            config['num_epochs'],
+            exp_manager,
+            dim,
+            dev,
+            pretrain_optimizer=pretrain_optimizer,
+            pretrain_epochs=config['pretrain_epochs']
+        )
         # Save best model.
         model_path = exp_manager.get_path('models', f'best_model_dim_{dim}.pth')
         if isinstance(model, nn.DataParallel):
