@@ -350,7 +350,8 @@ class ModularAugmentedLagrangian:
     """
 
     def __init__(self, model: nn.Module, loss_terms: List[LossTerm],
-                 mu_initial: float = 0.1, mu_max: float = 1e6):
+                 mu_initial: float = 0.1, mu_max: float = 1e6,
+                 mu_growth: float = 1.1, warmup_epochs: int = 0):
         """
         Initialize the augmented Lagrangian manager.
 
@@ -359,11 +360,15 @@ class ModularAugmentedLagrangian:
             loss_terms: List of loss terms
             mu_initial: Initial penalty parameter
             mu_max: Maximum penalty parameter
+            mu_growth: Multiplicative growth factor for penalty parameter
+            warmup_epochs: Number of epochs before updating penalty parameter
         """
         self.model = model
         self.loss_terms = {term.name: term for term in loss_terms}
         self.mu = mu_initial
         self.mu_max = mu_max
+        self.mu_growth = mu_growth
+        self.warmup_epochs = warmup_epochs
 
     def add_loss_term(self, term: LossTerm) -> None:
         """Add a new loss term"""
@@ -408,12 +413,13 @@ class ModularAugmentedLagrangian:
 
         return total_loss, loss_values
 
-    def update_multipliers(self, loss_values: Dict[str, float]) -> Dict[str, float]:
+    def update_multipliers(self, loss_values: Dict[str, float], epoch: int = 0) -> Dict[str, float]:
         """
         Update Lagrange multipliers and penalty parameter.
 
         Args:
             loss_values: Dictionary of computed loss values
+            epoch: Current training epoch
 
         Returns:
             constraint_violations: Dictionary of constraint violations
@@ -433,10 +439,9 @@ class ModularAugmentedLagrangian:
                     new_value = term.lagrange_multiplier.item() + self.mu * loss_values[name]
                     term.lagrange_multiplier = torch.tensor(new_value, requires_grad=True)
 
-            # Update penalty parameter
-            max_violation = max(constraint_violations.values(), default=0)
-            if self.mu < self.mu_max:
-                self.mu = min(self.mu * (1 + max_violation), self.mu_max)
+            # Update penalty parameter with optional warmup and growth factor
+            if epoch >= self.warmup_epochs and self.mu < self.mu_max:
+                self.mu = min(self.mu * self.mu_growth, self.mu_max)
 
         return constraint_violations
 
@@ -568,8 +573,10 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
     aug_lagrangian = ModularAugmentedLagrangian(
         model=model,
         loss_terms=loss_terms,
-        mu_initial=1.0,
-        mu_max=1e6
+        mu_initial=0.1,
+        mu_max=1e6,
+        mu_growth=1.1,
+        warmup_epochs=20
     )
 
     freq_update = 1
@@ -612,7 +619,7 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
             current_optimizer = optimizer
 
         # Use the loss values calculated within the closure
-        constraint_violations = aug_lagrangian.update_multipliers(current_loss_values)
+        constraint_violations = aug_lagrangian.update_multipliers(current_loss_values, epoch)
 
         if epoch % freq_update == 0:
             # Calculate accuracy metrics
