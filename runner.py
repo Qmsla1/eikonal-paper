@@ -67,6 +67,23 @@ config = {
         'tolerance_change': 1e-9,
         'history_size': 50,
         'line_search_fn': 'strong_wolfe'
+    },
+    'solver': {
+        'type': 'aug_lagrangian',
+        'mu_initial': 0.1,
+        'mu_max': 1e6,
+        'mu_growth': 1.0,
+        'dual_step': 0.01,
+        'dual_clip': [0.0, 1e6],
+        'update_every': 1
+    },
+    'objective': {
+        'type': 'exp_neg_mean',
+        'temperature': 0.1,
+        'quantile': 0.1
+    },
+    'training': {
+        'grad_clip_norm': None
     }
 }
 
