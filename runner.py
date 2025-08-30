@@ -53,11 +53,10 @@ config = {
     'n_neurons': 200,
     'output_dim': 1,
     'num_hidden_layers': 5,
-    'num_epochs': 1000,
-    'pretrain_epochs': 200,
+    'num_epochs': 1,
     'manifold_type': 'circle',
-    'n_train_int': 100000,
-    'n_train_b': 10000,
+    'n_train_int': 100,
+    'n_train_b': 100,
     'n_train_b_val': 100,
     'optimizer_config': {
         'lr': 1,
@@ -67,23 +66,6 @@ config = {
         'tolerance_change': 1e-9,
         'history_size': 50,
         'line_search_fn': 'strong_wolfe'
-    },
-    'solver': {
-        'type': 'aug_lagrangian',
-        'mu_initial': 0.1,
-        'mu_max': 1e6,
-        'mu_growth': 1.0,
-        'dual_step': 0.01,
-        'dual_clip': [0.0, 1e6],
-        'update_every': 1
-    },
-    'objective': {
-        'type': 'exp_neg_mean',
-        'temperature': 0.1,
-        'quantile': 0.1
-    },
-    'training': {
-        'grad_clip_norm': None
     }
 }
 
@@ -134,9 +116,9 @@ for dim in config['dimensions_to_test']:
         model = PINN(dim, config['n_neurons'], config['output_dim'], config['num_hidden_layers']).to(dev)
         if num_gpus > 1:
             model = nn.DataParallel(model)
-        # Initialize optimizers: Adam pretraining followed by LBFGS fine-tuning
+        # Initialize optimizer.
         optimizer = LBFGS(model.parameters(), **config['optimizer_config'])
-        pretrain_optimizer = Adam(model.parameters(), lr=1e-3)
+        # optimizer = Adam(model.parameters(), lr=0.1)
         # Import manifold instance.
         from manifolds.manifold_factory import ManifoldFactory
         manifold = ManifoldFactory.get_instance_direct(dev, config['manifold_type'], output_dim=dim)
@@ -145,18 +127,7 @@ for dim in config['dimensions_to_test']:
         x_train_b = sample_x_train_b(n_points=config['n_train_b'], manifold=manifold).to(dev0)
         x_train_int = sample_x_train_int(n_points=config['n_train_int'], manifold=manifold, r=0, r_max=20, dev=dev0).to(dev0)
         # Train the model.
-        model, metrics_collector = train_pinn(
-            model,
-            optimizer,
-            x_train_int,
-            x_train_b,
-            config['num_epochs'],
-            exp_manager,
-            dim,
-            dev,
-            pretrain_optimizer=pretrain_optimizer,
-            pretrain_epochs=config['pretrain_epochs']
-        )
+        model, metrics_collector = train_pinn(model, optimizer, x_train_int, x_train_b, config['num_epochs'], exp_manager, dim, dev)
         # Save best model.
         model_path = exp_manager.get_path('models', f'best_model_dim_{dim}.pth')
         if isinstance(model, nn.DataParallel):
