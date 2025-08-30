@@ -23,7 +23,6 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 
-
 # Utility function to unwrap a state_dict from DataParallel.
 def unwrap_state_dict(state_dict):
     # Remove 'module.' prefix if it exists.
@@ -33,93 +32,95 @@ def unwrap_state_dict(state_dict):
 
 
 class EnhancedEarlyStopping:
-   def __init__(self, warmup=30, patience=15, monitor_window=8, threshold=0.01, max_counter=30):
-       """
-       Args:
-           warmup: Number of epochs to wait before starting monitoring
-           patience: Number of epochs to wait after significant increase is detected
-           monitor_window: Window size for calculating moving averages
-           threshold: Threshold for significant increase (e.g. 0.1 = 10% increase)
-       """
-       self.warmup = warmup
-       self.patience = patience
-       self.monitor_window = monitor_window
-       self.threshold = threshold  # Threshold for significant increase detection
-       self.max_counter = max_counter
-       self.best_metric = float('inf')
-       self.best_state = None
-       self.best_epoch = None
-       self.counter = 0
-       self.metric_history = []
-       self.started_monitoring = False
-       self._remove_todo_force_stop = False
-       
-   def calculate_significant_increase(self):
-       """
-       Check if there is a significant increase in the metric by comparing
-       current moving average to previous window average.
-       Returns True if increase is above threshold.
-       """
-       if len(self.metric_history) < self.monitor_window:
-           return False
-       
-       recent_metrics = self.metric_history[-self.monitor_window:]
-       
-       # Calculate moving averages
-       moving_avg = np.mean(recent_metrics)
-       baseline_avg = np.mean(self.metric_history[:-self.monitor_window][-self.monitor_window:])
-       
-       # Calculate percent change
-       percent_change = (moving_avg - baseline_avg) / baseline_avg
-       
-       # Check if increase is significant
-       return percent_change > self.threshold
-       
-   def update(self, epoch, loss_values, state_dict):
-       """
-       Update early stopping state and check if training should stop.
-       
-       Args:
-           epoch: Current training epoch
-           loss_values: Dictionary containing loss components
-           state_dict: Current model state
-           
-       Returns:
-           stop_training (bool): Whether to stop training
-           best_state (dict): Best model state if stopping, None otherwise
-       """
-       if epoch < self.warmup or self._remove_todo_force_stop :
-           return False, None
-           
-       current_metric = loss_values['lagrangian_term'] / loss_values['true_loss']
-       self.metric_history.append(current_metric)
-       
-       if not self.started_monitoring and epoch >= self.warmup:
-           self.started_monitoring = True
-           print(f"Started monitoring at epoch {epoch}")
-           
-       if self.started_monitoring:
-           # Update best metric
-           if current_metric < self.best_metric:
-               self.best_metric = current_metric
-               self.best_state = copy.deepcopy(state_dict)
-               self.best_epoch = epoch
-               self.counter = 0
-           else:
-               self.counter += 1
-               
-           # Check for significant increase
-           if len(self.metric_history) >= 2 * self.monitor_window:
-               has_significant_increase = self.calculate_significant_increase()
-               
-               if has_significant_increase and self.counter >= self.patience or self.counter >= self.patience and self.counter >= self.max_counter:
-                   print(f"Early stopping triggered due to significant increase={has_significant_increase} Best metric: {self.best_metric:.6f} at epoch {self.best_epoch}")
-                   # todo remove for debuging only prints
-                   # return True, self.best_state
-                   self._remove_todo_force_stop = True
-                   return False, None
-                   
-       return False, None
+    def __init__(self, warmup=30, patience=15, monitor_window=8, threshold=0.01, max_counter=30):
+        """
+        Args:
+            warmup: Number of epochs to wait before starting monitoring
+            patience: Number of epochs to wait after significant increase is detected
+            monitor_window: Window size for calculating moving averages
+            threshold: Threshold for significant increase (e.g. 0.1 = 10% increase)
+        """
+        self.warmup = warmup
+        self.patience = patience
+        self.monitor_window = monitor_window
+        self.threshold = threshold  # Threshold for significant increase detection
+        self.max_counter = max_counter
+        self.best_metric = float('inf')
+        self.best_state = None
+        self.best_epoch = None
+        self.counter = 0
+        self.metric_history = []
+        self.started_monitoring = False
+        self._remove_todo_force_stop = False
+
+    def calculate_significant_increase(self):
+        """
+        Check if there is a significant increase in the metric by comparing
+        current moving average to previous window average.
+        Returns True if increase is above threshold.
+        """
+        if len(self.metric_history) < self.monitor_window:
+            return False
+
+        recent_metrics = self.metric_history[-self.monitor_window:]
+
+        # Calculate moving averages
+        moving_avg = np.mean(recent_metrics)
+        baseline_avg = np.mean(self.metric_history[:-self.monitor_window][-self.monitor_window:])
+
+        # Calculate percent change
+        percent_change = (moving_avg - baseline_avg) / baseline_avg
+
+        # Check if increase is significant
+        return percent_change > self.threshold
+
+    def update(self, epoch, loss_values, state_dict):
+        """
+        Update early stopping state and check if training should stop.
+
+        Args:
+            epoch: Current training epoch
+            loss_values: Dictionary containing loss components
+            state_dict: Current model state
+
+        Returns:
+            stop_training (bool): Whether to stop training
+            best_state (dict): Best model state if stopping, None otherwise
+        """
+        if epoch < self.warmup or self._remove_todo_force_stop:
+            return False, None
+
+        current_metric = loss_values['lagrangian_term'] / loss_values['true_loss']
+        self.metric_history.append(current_metric)
+
+        if not self.started_monitoring and epoch >= self.warmup:
+            self.started_monitoring = True
+            print(f"Started monitoring at epoch {epoch}")
+
+        if self.started_monitoring:
+            # Update best metric
+            if current_metric < self.best_metric:
+                self.best_metric = current_metric
+                self.best_state = copy.deepcopy(state_dict)
+                self.best_epoch = epoch
+                self.counter = 0
+            else:
+                self.counter += 1
+
+            # Check for significant increase
+            if len(self.metric_history) >= 2 * self.monitor_window:
+                has_significant_increase = self.calculate_significant_increase()
+
+                if has_significant_increase and self.counter >= self.patience or self.counter >= self.patience and self.counter >= self.max_counter:
+                    print(
+                        f"Early stopping triggered due to significant increase={has_significant_increase} Best metric: {self.best_metric:.6f} at epoch {self.best_epoch}")
+                    # todo remove for debuging only prints
+                    # return True, self.best_state
+                    self._remove_todo_force_stop = True
+                    return False, None
+
+        return False, None
+
 
 #############################################
 # Experiment Infrastructure
@@ -173,45 +174,45 @@ class MetricsCollector:
             df.to_csv(self.csv_file, mode='w', header=True, index=False)
 
     def plot_metrics(self):
-        if not self.metrics:   # nothing logged
+        if not self.metrics:  # nothing logged
             print(f"No metrics collected for {self.mode} in dim {self.dimension}, skipping plot.")
-            return
+        return
 
         df = pd.DataFrame(self.metrics)
-        
+
         plt.figure(figsize=(12, 6))
-        
+
         # Plot training accuracy
         ax1 = plt.gca()
         line1 = ax1.plot(df['epoch'], df['accuracy_error'], 'b-', label='Training Accuracy')
         ax1.set_xlabel('Epochs')
         ax1.set_ylabel('Training Accuracy', color='b')
         ax1.tick_params(axis='y', labelcolor='b')
-        
+
         # Plot loss_int/loss_dmax ratio on secondary y-axis
         ax2 = ax1.twinx()
         ratio = df['loss_int'] / df['loss_dmax']
         line2 = ax2.plot(df['epoch'], ratio, 'r-', label='loss_int/loss_dmax ratio')
         ax2.set_ylabel('Loss Ratio', color='r')
         ax2.tick_params(axis='y', labelcolor='r')
-        
+
         # Combine lines for legend
         lines = line1 + line2
         labels = [l.get_label() for l in lines]
         ax1.legend(lines, labels, loc='upper right')
-        
+
         plt.title(f'Training Metrics - {self.exp_manager.manifold_type} Dim {self.dimension}')
         plt.grid(True)
-        
+
         plot_path = self.exp_manager.get_path('plots',
-                                           f'training_metrics_{self.exp_manager.manifold_type}_dim_{self.dimension}.png')
+                                              f'training_metrics_{self.exp_manager.manifold_type}_dim_{self.dimension}.png')
         plt.savefig(plot_path)
         plt.close()
 
     def save_all_metrics(self):
-        if not self.metrics:   # nothing logged
+        if not self.metrics:  # nothing logged
             print(f"No metrics to save for {self.mode} in dim {self.dimension}.")
-            return
+        return
         df = pd.DataFrame(self.metrics)
         df.to_csv(self.csv_file, mode='w', header=True, index=False)
 
@@ -291,9 +292,6 @@ def sample_x_train_int(n_points, manifold, r=1.0, r_max=2.0, dev=torch.device("c
     return data
 
 
-
-
-
 @dataclass
 class LossTerm:
     """
@@ -319,15 +317,14 @@ class LossTerm:
     use_penalty: bool = False
     weight: float = 1.0
     lagrange_multiplier: Optional[torch.Tensor] = None
-    sense: str = "eq"  # "eq", "le", or "ge"
 
     def __post_init__(self):
         if self.use_lagrange_multiplier and self.lagrange_multiplier is None:
             self.lagrange_multiplier = torch.tensor(1.0, requires_grad=True)
 
-    def compute(self, *args, **kwargs) -> torch.Tensor:
+    def compute(self, *args, square_cx, **kwargs) -> torch.Tensor:
         """Compute the loss value"""
-        return self.compute_fn(*args, **kwargs)
+        return self.compute_fn(*args, square_cx=square_cx, **kwargs)
 
     def get_weight(self) -> Union[float, torch.Tensor]:
         """Get the weight or Lagrange multiplier for this term"""
@@ -335,236 +332,177 @@ class LossTerm:
             return self.lagrange_multiplier
         return self.weight
 
-    def violation(self, value: torch.Tensor) -> torch.Tensor:
-        """Compute constraint violation depending on constraint sense"""
+    def get_violation(self, value: torch.Tensor) -> float:
+        """Compute constraint violation"""
         if not self.is_constraint:
-            return torch.tensor(0.0, device=value.device if torch.is_tensor(value) else 'cpu')
-        v = value - self.target_value
-        if self.sense == "eq":
-            return torch.abs(v)
-        elif self.sense == "le":
-            return torch.clamp(v, min=0.0)
-        elif self.sense == "ge":
-            return torch.clamp(-v, min=0.0)
-        else:
-            raise ValueError(f"Unknown constraint sense: {self.sense}")
+            return 0.0
+        return max(0.0, value - self.tolerance)
 
 
-class BaseConstrainedObjective:
-    def __init__(self, model: nn.Module, loss_terms: List[LossTerm], cfg: Dict):
+class ModularAugmentedLagrangian:
+    """
+    A modular implementation of the augmented Lagrangian method.
+
+    This class manages multiple loss terms, computes the augmented Lagrangian,
+    and updates the Lagrange multipliers and penalty parameter.
+    """
+
+    def __init__(self, model: nn.Module, loss_terms: List[LossTerm],
+                 mu_initial: float = 0.1, mu_max: float = 1e6):
+        """
+        Initialize the augmented Lagrangian manager.
+
+        Args:
+            model: The model being trained
+            loss_terms: List of loss terms
+            mu_initial: Initial penalty parameter
+            mu_max: Maximum penalty parameter
+        """
         self.model = model
         self.loss_terms = {term.name: term for term in loss_terms}
-        self.cfg = cfg or {}
+        self.mu = mu_initial
+        self.mu_max = mu_max
 
-    def compute_all_terms(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
-        values = {}
+    def add_loss_term(self, term: LossTerm) -> None:
+        """Add a new loss term"""
+        self.loss_terms[term.name] = term
+
+    def compute_loss(self, *args, **kwargs) -> Tuple[torch.Tensor, Dict[str, float]]:
+        """
+        Compute the augmented Lagrangian loss.
+
+        Returns:
+            total_loss: The total loss value
+            loss_values: Dictionary of all computed loss values
+        """
+        # Compute individual loss terms
+        loss_values = {}
+        loss_values_square = {}
+
         for name, term in self.loss_terms.items():
-            values[name] = term.compute(*args, **kwargs)
-        return values
+            loss_values[name] = term.compute(*args,square_cx=False, **kwargs)
+            loss_values_square[name] = term.compute(*args,square_cx=True, **kwargs)
 
-    def compute_loss(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def update_duals(self, epoch: int, violations_dict: Dict[str, float]):
-        return False
-
-
-class AugLagSolver(BaseConstrainedObjective):
-    """Augmented Lagrangian solver"""
-
-    def __init__(self, model: nn.Module, loss_terms: List[LossTerm], cfg: Dict):
-        super().__init__(model, loss_terms, cfg)
-        self.mu = float(cfg.get("mu_initial", 0.1))
-        self.mu_max = float(cfg.get("mu_max", 50.0))
-        self.dual_lr = cfg.get("dual_lr", 0.05)
-        self.lambda_clip = cfg.get("lambda_clip", 5.0)
-        self.mu_growth = cfg.get("mu_growth", 1.10)
-        self.mu_warmup = cfg.get("mu_warmup", 20)
-        self.mu_update_every = cfg.get("mu_update_every", 5)
-        self.violation_beta = cfg.get("violation_beta", 0.9)
-        self.violation_ema = 0.0
-        self.last_mu_update_epoch = -10
-
-    def compute_loss(self, *args, **kwargs):
-        loss_values = self.compute_all_terms(*args, **kwargs)
+        # Compute true loss (sum of all terms without multipliers)
         true_loss = sum(loss_values.values())
         loss_values['true_loss'] = true_loss.item()
 
-        lagrangian_term = sum(
-            term.get_weight() * loss_values[name]
-            for name, term in self.loss_terms.items()
-            if term.use_lagrange_multiplier or not term.is_constraint
-        )
+        # Compute Lagrangian term (debuggable loop version)
+        lagrangian_term = 0.0
+        for name, term in self.loss_terms.items():
+            if term.use_lagrange_multiplier or not term.is_constraint:
+                lagrangian_term += term.get_weight() * loss_values[name]
+
         loss_values['lagrangian_term'] = lagrangian_term.item()
 
-        augmented_term = (self.mu / 2) * sum(
-            loss_values[name] ** 2
-            for name, term in self.loss_terms.items()
-            if term.is_constraint and term.use_penalty
-        )
+        augmented_term = 0.0
+        for name, term in self.loss_terms.items():
+            if term.is_constraint and term.use_penalty:
+                augmented_term += (self.mu / 2) * (loss_values_square[name] )
         loss_values['augmented_term'] = augmented_term.item()
 
-        total_loss = lagrangian_term + augmented_term
+
+        # todo more generic to extract the objective objective = [term for term in self.loss_terms.values() if not term.is_constraint]
+        # Compute total loss
+        total_loss = lagrangian_term + augmented_term + loss_values['loss_dmax']
         loss_values['loss'] = total_loss.item()
+
         return total_loss, loss_values
 
-    @torch.no_grad()
-    def update_duals(self, epoch: int, violations_dict: Dict[str, float]):
-        mean_v = 0.0
-        n = 0
-        for name, term in self.loss_terms.items():
-            v = float(max(0.0, violations_dict.get(name, 0.0)))
-            n += 1
-            mean_v += v
-            if term.use_lagrange_multiplier:
-                new_lambda = term.lagrange_multiplier.item() + self.dual_lr * v
-                new_lambda = min(max(new_lambda, 0.0), self.lambda_clip)
-                term.lagrange_multiplier.copy_(torch.tensor(new_lambda, device=term.lagrange_multiplier.device))
+    def update_multipliers(self, loss_values: Dict[str, float]) -> Dict[str, float]:
+        """
+        Update Lagrange multipliers and penalty parameter.
 
-        mean_v = mean_v / max(n, 1)
-        self.violation_ema = self.violation_beta * self.violation_ema + (1 - self.violation_beta) * mean_v
+        Args:
+            loss_values: Dictionary of computed loss values
 
-        if (epoch >= self.mu_warmup and
-            epoch - self.last_mu_update_epoch >= self.mu_update_every and
-            self.violation_ema > 0.05):
-            self.mu = min(self.mu * self.mu_growth, self.mu_max)
-            self.last_mu_update_epoch = epoch
+        Returns:
+            constraint_violations: Dictionary of constraint violations
+        """
+        # Compute constraint violations
+        constraint_violations = {
+            name: term.get_violation(loss_values[name])
+            for name, term in self.loss_terms.items()
+            if term.is_constraint
+        }
 
+        # Update Lagrange multipliers if constraints are violated
+        if any(v > 0 for v in constraint_violations.values()):
+            for name, term in self.loss_terms.items():
+                if term.is_constraint and term.use_lagrange_multiplier:
+                    # Create a new tensor for the updated multiplier (avoids in-place operation)
+                    new_value = term.lagrange_multiplier.item() + self.mu * loss_values[name]
+                    term.lagrange_multiplier = torch.tensor(new_value, requires_grad=True)
 
-class PenaltySolver(BaseConstrainedObjective):
-    def __init__(self, model: nn.Module, loss_terms: List[LossTerm], cfg: Dict):
-        super().__init__(model, loss_terms, cfg)
-        self.mu = float(cfg.get("mu_initial", 0.1))
-        self.mu_max = float(cfg.get("mu_max", 1e6))
-        self.mu_growth = float(cfg.get("mu_growth", 1.0))
+            # Update penalty parameter
+            max_violation = max(constraint_violations.values(), default=0)
+            if self.mu < self.mu_max:
+                self.mu = min(self.mu * (1 + max_violation), self.mu_max)
 
-    def compute_loss(self, *args, **kwargs):
-        loss_values = self.compute_all_terms(*args, **kwargs)
-        obj = sum(loss_values[name] for name, t in self.loss_terms.items() if not t.is_constraint)
-        pen = 0.0
-        for name, t in self.loss_terms.items():
-            if t.is_constraint:
-                v = t.violation(loss_values[name])
-                pen = pen + 0.5 * self.mu * (v ** 2)
-        total = obj + pen
-        loss_values['true_loss'] = sum(loss_values.values()).item()
-        loss_values['lagrangian_term'] = obj.item() if torch.is_tensor(obj) else obj
-        loss_values['augmented_term'] = pen.item() if torch.is_tensor(pen) else pen
-        loss_values['loss'] = total.item() if torch.is_tensor(total) else total
-        return total, loss_values
-
-    @torch.no_grad()
-    def update_duals(self, epoch: int, violations_dict: Dict[str, float]):
-        max_v = 0.0
-        for v in violations_dict.values():
-            max_v = max(max_v, abs(float(v)))
-        if max_v > 1e-4 and self.mu < self.mu_max:
-            growth = max(self.mu_growth, 1.0 + max_v)
-            self.mu = min(self.mu * growth, self.mu_max)
-
-
-class PrimalDualSolver(BaseConstrainedObjective):
-    def __init__(self, model: nn.Module, loss_terms: List[LossTerm], cfg: Dict):
-        super().__init__(model, loss_terms, cfg)
-        self.eta = float(cfg.get("dual_step", 0.01))
-        lo, hi = cfg.get("dual_clip", [0.0, 1e6])
-        self.dual_clip = (float(lo), float(hi))
-        for t in self.loss_terms.values():
-            if t.is_constraint and t.use_lagrange_multiplier:
-                if t.lagrange_multiplier is None or not torch.is_tensor(t.lagrange_multiplier):
-                    t.lagrange_multiplier = torch.tensor(1.0, requires_grad=False)
-
-    def compute_loss(self, *args, **kwargs):
-        loss_values = self.compute_all_terms(*args, **kwargs)
-        obj = sum(loss_values[name] for name, t in self.loss_terms.items() if not t.is_constraint)
-        lag = obj
-        for name, t in self.loss_terms.items():
-            if t.is_constraint:
-                g = loss_values[name] - t.target_value
-                lag = lag + t.get_weight() * g
-        loss_values['true_loss'] = sum(loss_values.values()).item()
-        lag_val = lag.item() if torch.is_tensor(lag) else lag
-        loss_values['lagrangian_term'] = lag_val
-        loss_values['augmented_term'] = 0.0
-        loss_values['loss'] = lag_val
-        return lag, loss_values
-
-    @torch.no_grad()
-    def update_duals(self, epoch: int, violations_dict: Dict[str, float]):
-        for name, t in self.loss_terms.items():
-            if t.is_constraint and t.use_lagrange_multiplier:
-                g = torch.tensor(violations_dict.get(name, 0.0), device=t.lagrange_multiplier.device)
-                new_lambda = t.lagrange_multiplier + self.eta * g
-                lo, hi = self.dual_clip
-                t.lagrange_multiplier.copy_(torch.clamp(new_lambda, lo, hi))
-
-
-# Backward compatibility alias
-ModularAugmentedLagrangian = AugLagSolver
+        return constraint_violations
 
 
 # Example loss term implementations for your PINN problem
-def int_loss_fn(model, x, epoch=None):
+def int_loss_fn(model, x, square_cx=False):
     """Interior PDE loss"""
     y_pred = model(x)
     y_pred_x = torch.autograd.grad(y_pred, x, grad_outputs=torch.ones_like(y_pred), create_graph=True)[0]
-    pde_residual = torch.sum(y_pred_x ** 2, dim=1) - 1.0
-    return torch.mean(pde_residual ** 2)
+    pde_residual = torch.sum(y_pred_x, dim=1) - 1.0
+    if not square_cx:
+        return torch.mean(pde_residual)
+    else:
+        return torch.mean(pde_residual ** 2)
+
+def conv_int_loss_fn(model, x, square_cx=False):
+    import torch.nn.functional as F
+
+    """Interior PDE loss"""
+    y_pred = model(x)
+    y_pred_x = torch.autograd.grad(y_pred, x, grad_outputs=torch.ones_like(y_pred), create_graph=True)[0]
+    pde_residual = torch.sum(y_pred_x , dim=1) - 1.0
+
+    relu_neg_eik = F.relu(pde_residual)
+
+    if not square_cx:
+        return torch.mean(relu_neg_eik )
+    else:
+        return torch.mean(relu_neg_eik ** 2)
 
 
-def boundary_loss_fn(model, x):
+
+
+def boundary_loss_fn(model, x, square_cx=False):
     """Boundary condition loss"""
-    return torch.mean(model(x) ** 2)
+    if not square_cx:
+        return torch.mean(model(x))
+    else:
+        return torch.mean(model(x) ** 2)
 
 
-def boundary_grad_loss_fn(model, x):
+def boundary_grad_loss_fn(model, x, square_cx=False):
     """Boundary gradient loss"""
     y_pred = model(x)
     y_pred_x = torch.autograd.grad(y_pred, x, grad_outputs=torch.ones_like(y_pred), create_graph=True)[0]
     pde_residual = torch.sum(y_pred_x ** 2, dim=1)
-    return torch.mean(pde_residual ** 2)
+    if not square_cx:
+        return torch.mean(pde_residual)
+    else:
+        return torch.mean(pde_residual ** 2)
 
 
-def dmax_exp_neg_mean(model, x):
-    """Default exponential negative mean objective"""
+def dmax_loss_fn(model, x):
+    """Maximum distance loss"""
     return torch.exp(-0.5 * torch.mean(model(x)))
 
 
-def dmax_softmax(model, x, temperature=0.1):
-    u = model(x).reshape(-1)
-    return -temperature * torch.logsumexp(u / temperature, dim=0)
-
-
-def dmax_quantile(model, x, q=0.1):
-    u = model(x).reshape(-1)
-    qv = torch.quantile(u, q)
-    return -qv
-
-
-def dmax_minimax(model, x, temperature=0.05):
-    u = model(x).reshape(-1)
-    return temperature * torch.logsumexp(-u / temperature, dim=0)
-
-
-def build_dmax_objective(objective_cfg):
-    """Factory to build the distance maximization objective"""
-    typ = objective_cfg.get("type", "exp_neg_mean") if objective_cfg else "exp_neg_mean"
-    if typ == "softmax":
-        T = float(objective_cfg.get("temperature", 0.1))
-        return lambda model, x: dmax_softmax(model, x, temperature=T)
-    if typ == "quantile":
-        q = float(objective_cfg.get("quantile", 0.1))
-        return lambda model, x: dmax_quantile(model, x, q=q)
-    if typ == "minimax":
-        T = float(objective_cfg.get("temperature", 0.05))
-        return lambda model, x: dmax_minimax(model, x, temperature=T)
-    return dmax_exp_neg_mean
-
-
-def abs_loss_fn(model, x_int, x_b):
+def abs_loss_fn(model, x_int, x_b, square_cx=False):
     """Absolute value constraint loss"""
-    return (torch.mean((model(x_int) - torch.abs(model(x_int))) ** 2) +
-            torch.mean((model(x_b) - torch.abs(model(x_b))) ** 2))
+    abs_int =  torch.abs(model(x_int)) - model(x_int)
+    abd_b =  torch.abs(model(x_b)) - model(x_b)
+    if not square_cx:
+        return torch.mean(abs_int) + torch.mean(abd_b )
+    else:
+        return (torch.mean(abs_int ** 2) + torch.mean(abd_b ** 2))
 
 
 def projection_loss_fn(model, x, epoch=None):
@@ -580,7 +518,7 @@ def projection_loss_fn(model, x, epoch=None):
 
 
 # Example usage for training a PINN
-def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, data_dim, dev, pretrain_optimizer=None, pretrain_epochs=0):
+def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, data_dim, dev):
     """
     Train a PINN using the modular augmented Lagrangian method.
     """
@@ -592,68 +530,90 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
     checkpoint = ModelCheckpoint(exp_manager, data_dim=data_dim, max_keep=3)
     early_stopper = EnhancedEarlyStopping()
 
-    cfg = exp_manager.base_config
-    objective_fn = build_dmax_objective(cfg.get("objective", {}))
-
+    # Create loss terms
     loss_terms = [
+        # Interior PDE loss
         LossTerm(
             name="loss_int",
-            compute_fn=lambda: int_loss_fn(model, x_train, epoch),
+            compute_fn=lambda square_cx: int_loss_fn(model, x_train, square_cx=square_cx),
             is_constraint=True,
             tolerance=1e-4,
             use_lagrange_multiplier=True,
             use_penalty=True
         ),
+        # Convexified Interior PDE loss conv_int_loss_fn
+        LossTerm(
+            name="conv_loss_int",
+            compute_fn=lambda square_cx: conv_int_loss_fn(model, x_train, square_cx=square_cx),
+            is_constraint=True,
+            tolerance=1e-4,
+            use_lagrange_multiplier=True,
+            use_penalty=True
+        ),
+
+        # Boundary condition loss
         LossTerm(
             name="loss_b",
-            compute_fn=lambda: boundary_loss_fn(model, x_train_0),
+            compute_fn=lambda square_cx: boundary_loss_fn(model, x_train_0, square_cx=square_cx),
             is_constraint=True,
             tolerance=1e-4,
             use_lagrange_multiplier=True,
             use_penalty=True
         ),
-        LossTerm(
-            name="loss_grad_boundry",
-            compute_fn=lambda: boundary_grad_loss_fn(model, x_train_0),
-            is_constraint=True,
-            tolerance=1e-4,
-            use_lagrange_multiplier=True,
-            use_penalty=True
-        ),
+        # # Boundary gradient loss
+        # LossTerm(
+        #     name="loss_grad_boundry",
+        #     compute_fn=lambda square_cx: boundary_grad_loss_fn(model, x_train_0, square_cx=square_cx),
+        #     is_constraint=True,
+        #     tolerance=1e-4,
+        #     use_lagrange_multiplier=True,
+        #     use_penalty=True
+        # ),
+        # Maximum distance loss (objective term)
         LossTerm(
             name="loss_dmax",
-            compute_fn=lambda: objective_fn(model, x_train),
+            compute_fn=lambda square_cx: dmax_loss_fn(model, x_train),
             is_constraint=False,
-            use_lagrange_multiplier=True,
+            use_lagrange_multiplier=False,
+            weight=1.0
         ),
+        # Absolute value constraint
         LossTerm(
             name="loss_abs",
-            compute_fn=lambda: abs_loss_fn(model, x_train, x_train_0),
+            compute_fn=lambda square_cx: abs_loss_fn(model, x_train, x_train_0, square_cx=square_cx),
             is_constraint=True,
             tolerance=1e-4,
             use_lagrange_multiplier=True,
             use_penalty=True
         ),
+        # Projection losses (commented out by default)
+        # LossTerm(
+        #     name="loss_proj_b",
+        #     compute_fn=lambda: projection_loss_fn(model, x_train_0, epoch),
+        #     is_constraint=True,
+        #     tolerance=1e-4,
+        #     use_lagrange_multiplier=True,
+        #     use_penalty=True
+        # ),
+        # LossTerm(
+        #     name="loss_proj_int",
+        #     compute_fn=lambda: projection_loss_fn(model, x_train, epoch),
+        #     is_constraint=True,
+        #     tolerance=1e-4,
+        #     use_lagrange_multiplier=True,
+        #     use_penalty=True
+        # )
     ]
 
-    solver_cfg = cfg.get("solver", {})
-    solver_type = solver_cfg.get("type", "aug_lagrangian")
-    if solver_type == "penalty":
-        aug_lagrangian = PenaltySolver(model, loss_terms, solver_cfg)
-    elif solver_type == "primal_dual":
-        aug_lagrangian = PrimalDualSolver(model, loss_terms, solver_cfg)
-    else:
-        aug_lagrangian = AugLagSolver(model, loss_terms, solver_cfg)
+    # Initialize augmented Lagrangian manager
+    aug_lagrangian = ModularAugmentedLagrangian(
+        model=model,
+        loss_terms=loss_terms,
+        mu_initial=0.1,
+        mu_max=1e6
+    )
 
     freq_update = 1
-
-    current_optimizer = pretrain_optimizer if pretrain_optimizer is not None else optimizer
-
-    # Print legend for compact log output
-    legend_parts = ['Legend: E=Error', 'L=Loss', 'LG=Lagrangian-term', 'AG=Augmented-term']
-    legend_parts += [f"{name.replace('loss_', '')}={name}" for name in aug_lagrangian.loss_terms.keys()]
-    legend_parts.append('μ=penalty parameter')
-    print(' '.join(legend_parts))
 
     for epoch in range(num_epochs):
         # Store loss values outside closure for access after optimization step
@@ -661,7 +621,7 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
 
         def closure():
             nonlocal current_loss_values
-            current_optimizer.zero_grad()
+            optimizer.zero_grad()
 
             # Compute total loss and get individual loss values
             loss, loss_values = aug_lagrangian.compute_loss()
@@ -676,24 +636,13 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
                 return loss
 
             loss.backward()
-            clip_val = exp_manager.base_config.get("training", {}).get("grad_clip_norm")
-            if clip_val is not None:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=clip_val)
             return loss
 
         # Update model parameters - this runs the closure function
-        loss = current_optimizer.step(closure)
-
-        if pretrain_optimizer is not None and epoch + 1 == pretrain_epochs:
-            current_optimizer = optimizer
+        loss = optimizer.step(closure)
 
         # Use the loss values calculated within the closure
-        constraint_violations = {
-            name: current_loss_values[name] - term.target_value
-            for name, term in aug_lagrangian.loss_terms.items()
-            if term.is_constraint
-        }
-        aug_lagrangian.update_duals(epoch, constraint_violations)
+        constraint_violations = aug_lagrangian.update_multipliers(current_loss_values)
 
         if epoch % freq_update == 0:
             # Calculate accuracy metrics
@@ -712,17 +661,16 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
             metrics_data = {
                 'epoch': epoch,
                 'accuracy_error': train_acc_error.item(),
+                'mu': aug_lagrangian.mu,
                 **current_loss_values
             }
-            if hasattr(aug_lagrangian, 'mu'):
-                metrics_data['mu'] = aug_lagrangian.mu
 
             # Add Lagrange multipliers and constraint violations
             for name, term in aug_lagrangian.loss_terms.items():
                 if term.use_lagrange_multiplier:
                     metrics_data[f'lambda_{name}'] = term.lagrange_multiplier.item()
                 if term.is_constraint:
-                    metrics_data[f'{name}_violation'] = term.violation(torch.tensor(current_loss_values[name])).item()
+                    metrics_data[f'{name}_violation'] = constraint_violations.get(name, 0)
 
             metrics_collector.add_metric(**metrics_data)
 
@@ -746,28 +694,22 @@ def train_pinn(model, optimizer, x_train, x_train_0, num_epochs, exp_manager, da
                 metrics_collector.plot_metrics()
                 break
 
-            # Print progress in a compact single line
-            status_line = (
-                f'Epoch {epoch}:[{data_dim}] '
-                f'E:{train_acc_error:.6f} '
-                f'L:{current_loss_values["loss"]:.6f} '
-                f'LG:{current_loss_values["lagrangian_term"]:.6f} '
-                f'AG:{current_loss_values["augmented_term"]:.6f} '
-            )
+            # Print progress
+            # Print progress in a single line
+            status_line = f'Epoch {epoch}:[{data_dim}], Error: {train_acc_error:.6f}, Loss: {current_loss_values["loss"]:.6f}, '
+            status_line += f'Lagrangian-term: {current_loss_values["lagrangian_term"]:.6f}, Augmented-term: {current_loss_values["augmented_term"]:.6f}, '
 
             # Add loss terms info
             terms_info = []
             for name, term in aug_lagrangian.loss_terms.items():
-                short_name = name.replace("loss_", "")
-                weight_val = term.get_weight() if not torch.is_tensor(term.get_weight()) else term.get_weight().item()
+                weight_val = term.get_weight() if not torch.is_tensor(
+                    term.get_weight()) else term.get_weight().item()
                 weight_str = f"λ={weight_val:.4f}" if term.use_lagrange_multiplier else f"w={weight_val:.4f}"
                 violation_str = f"v={constraint_violations.get(name, 0):.6f}" if term.is_constraint else ""
                 terms_info.append(
-                    f"{short_name}:{current_loss_values[name]:.6f}({weight_str}{' ' + violation_str if violation_str else ''})"
-                )
+                    f"{name}={current_loss_values[name]:.6f}({weight_str}{' ' + violation_str if violation_str else ''})")
 
-            mu_val = getattr(aug_lagrangian, 'mu', 0.0)
-            status_line += ' '.join(terms_info) + f' μ:{mu_val:.4f}'
+            status_line += ', '.join(terms_info) + f", μ={aug_lagrangian.mu:.4f}"
             print(status_line)
 
         # If training loop completes without early stopping, save all metrics
